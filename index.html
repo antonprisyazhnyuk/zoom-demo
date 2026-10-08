@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>ZOOM VADERS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap" rel="stylesheet">
+<style>
+  @font-face { font-family: 'Pixeloid Mono'; src: url(fonts/PixeloidMono.ttf) format('truetype'); }
+  :root {
+    --navy: #011b43;
+    --navy-2: #13295a;
+    --yellow: #fbda94;
+    --orange: #f0a521;
+    --red: #a80a09;
+    --ink: #0c1d42;
+    --muted: rgba(251, 218, 148, .65);
+    --edge: #a8620a;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--navy); color: var(--yellow); }
+  body {
+    font-family: Inter, system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  /* поле 360 в ширину, высота 640–800: телефон повыше получает поле повыше (решение 08.10) */
+  #wrap { position: relative; width: min(100vw, calc(100dvh * 9 / 16));
+    height: min(100dvh, calc(min(100vw, calc(100dvh * 9 / 16)) * 20 / 9)); --u: calc(100cqw / 360); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+  .px { font-family: "Pixeloid Mono", Inter, sans-serif; letter-spacing: .02em; }
+  #wrap { container-type: inline-size; }
+  /* шапка — вариант 2 «одна строка» из Figma: сердечки · счёт и волна · кнопка «ПАУЗА» 80×24 */
+  #hud { position: absolute; left: 0; right: 0; top: 0; height: calc(70 * var(--u)); pointer-events: none; transition: opacity .2s; }
+  #hud.dim { opacity: .35; }
+  #hud .hearts { position: absolute; left: calc(12 * var(--u)); top: calc(25 * var(--u)); display: flex; gap: calc(4 * var(--u)); }
+  #hud .hearts img { width: calc(23 * var(--u)); height: calc(20 * var(--u)); display: block; }
+  #hud .hearts img.lost { opacity: .18; }
+  #hud .mid { position: absolute; left: 0; right: 0; top: calc(12 * var(--u)); text-align: center; }
+  #hScore { font-size: calc(24 * var(--u)); line-height: calc(30 * var(--u)); color: var(--yellow); font-variant-numeric: tabular-nums; }
+  #hWave { font-size: calc(12 * var(--u)); line-height: calc(15 * var(--u)); color: var(--orange); }
+  #bPause { position: absolute; left: calc(268 * var(--u)); top: calc(23 * var(--u)); width: calc(80 * var(--u)); height: calc(24 * var(--u));
+    border: 0; padding: 0 0 calc(2 * var(--u)) calc(2 * var(--u)); background: var(--orange); color: var(--navy);
+    font: calc(16 * var(--u)) "Pixeloid Mono", monospace; cursor: pointer; pointer-events: auto; display: none;
+    box-shadow: inset calc(2 * var(--u)) calc(-2 * var(--u)) 0 var(--edge); }
+  #bPause:active { box-shadow: none; padding: calc(2 * var(--u)) calc(2 * var(--u)) 0 0; }
+  #bPause:focus-visible, .btn:focus-visible { outline: calc(2 * var(--u)) solid #fff3d6; outline-offset: calc(2 * var(--u)); }
+  .screen {
+    position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3.5cqw; padding: 8cqw; text-align: center;
+    background: linear-gradient(to bottom, rgba(1,27,67,.72), rgba(1,27,67,.92));
+  }
+  .screen.on { display: flex; }
+  .logo { font-size: 15cqw; font-weight: 400; line-height: .9; color: var(--orange); text-shadow: .6cqw .6cqw 0 #000; }
+  .logo-img { width: calc(321 * var(--u)); max-width: 100%; height: auto; display: block; margin-bottom: calc(4 * var(--u)); }
+  .sub { font-family: Inter, sans-serif; font-weight: 400; font-size: calc(15 * var(--u)); color: var(--yellow); max-width: calc(240 * var(--u)); line-height: 1.3; }
+  .tag { font-size: 3.4cqw; color: var(--muted); text-transform: uppercase; }
+  .btn {
+    font: 400 calc(18 * var(--u)) "Pixeloid Mono", Inter, sans-serif; color: var(--navy); background: var(--orange);
+    border: 0; height: calc(44 * var(--u)); width: calc(246 * var(--u)); box-shadow: 1cqw 1cqw 0 #000; cursor: pointer;
+  }
+  .btn:active { transform: translate(1cqw, 1cqw); box-shadow: none; }
+  .btn.ghost { background: transparent; color: var(--yellow); box-shadow: none; border: calc(1.8 * var(--u)) solid var(--yellow); font-size: calc(15 * var(--u)); }
+  .btn[disabled] { opacity: .45; pointer-events: none; }
+  .attempts { font-family: Inter, sans-serif; font-size: calc(14.4 * var(--u)); color: var(--orange); }
+  .attempts b { color: var(--orange); font-weight: 400; }
+  input.code {
+    font: 6cqw "Pixeloid Mono", monospace; text-align: center; text-transform: uppercase;
+    width: 70cqw; padding: 2.5cqw; background: var(--navy-2); color: #fff3d6; border: .5cqw solid var(--yellow); outline: none;
+  }
+  .note { font-family: Inter, sans-serif; font-size: calc(12.25 * var(--u)); color: var(--yellow); max-width: calc(274 * var(--u)); line-height: 1.4; }
+  .msg { min-height: 1.4em; font-size: 4cqw; color: var(--orange); }
+  table.lb { border-collapse: collapse; width: 78cqw; font: 400 4cqw Inter, sans-serif; }
+  table.lb td { padding: 1.2cqw 1.5cqw; text-align: left; border-bottom: .3cqw solid rgba(251,218,148,.15); }
+  table.lb td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  table.lb tr.me td { color: var(--orange); font-weight: 700; }
+  .cheat { font-size: 5cqw; letter-spacing: .3em; color: var(--orange); }
+
+  /* ---------- десктоп: игра колонкой по центру, по бокам — лендинг ---------- */
+  .side, .desk-boss { display: none; }
+  @media (min-width: 1024px) {
+    /* десктоп — макет «десктоп · A · 1440×900» (08.10): три колонки по 360, между ними 84.
+       Обвязка артефакта отступает у :root снизу/сверху на safe-area телефона; на десктопе это сдвигало
+       колонки вверх от центра окна (скрин Антона 08.10) — обнуляем и центруем по полной высоте окна */
+    :root { padding-block: 0 !important; }
+    html, body { height: 100dvh; }
+    body {
+      /* расширения браузера подкладывают в body свои блоки (у Антона — Give Freely): они становились второй строкой
+         сетки и сдвигали колонки вверх. Наши колонки — в первой строке на всю высоту, чужие строки нулевые */
+      display: grid; grid-template-columns: minmax(0, 360px) auto minmax(0, 360px); justify-content: center; align-items: center;
+      grid-template-rows: 100dvh; grid-auto-rows: 0;
+      column-gap: clamp(24px, 5.8vw, 84px); padding-inline: 24px;
+      background:
+        radial-gradient(ellipse at 50% 60%, rgba(19,54,106,.9), rgba(1,27,67,0) 60%),
+        url(assets/stars-tile.png) 0 0 / 640px 640px repeat,
+        url(assets/stars-tile.png) 160px 90px / 320px 320px repeat,
+        var(--navy);
+      image-rendering: pixelated;
+      animation: fly 14s linear infinite;
+    }
+    @keyframes fly { to { background-position: 0 0, 0 640px, 160px 410px; } }
+    @media (prefers-reduced-motion: reduce) { body { animation: none; } }
+    /* колонка игры — поле 360×800, как на высоком телефоне */
+    #wrap { height: min(calc(100dvh - 100px), 800px); width: auto; aspect-ratio: 360 / 800; outline: 4px solid var(--yellow); box-shadow: 10px 10px 0 #000; }
+    .side { display: flex; flex-direction: column; color: var(--yellow); width: 100%; max-width: 360px; }
+    .side.left { gap: 60px; }
+    .side.right { gap: 28px; }
+    .side .brand { display: flex; flex-direction: column; gap: 12px; }
+    .side .brand img { width: 321px; max-width: 100%; height: auto; display: block; }
+    .side .eyebrow { font: 16px "Pixeloid Mono", monospace; color: #e0431a; text-transform: uppercase; }
+    .side ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 24px; }
+    .side li { display: flex; flex-direction: column; gap: 14px; font: 17px/24px Inter, sans-serif; max-width: 320px; }
+    .side li b { font: 26px/32px "Pixeloid Mono", monospace; color: var(--orange); }
+    .card { background: #0a2150; border: 3px solid var(--yellow); padding: 20px 22px; }
+    .card h3 { font: 20px "Pixeloid Mono", monospace; margin: 0 0 12px; color: #fff3d6; text-transform: uppercase; }
+    .note .touch { display: none; }
+    /* босс-талисман (08.10, Антон): по очереди выглядывает под углом из-за разных блоков, раз в три выглядывания
+       облетает экран силуэтом. Всегда ПОЗАДИ контента — блоки и текст поверх. Движение — в скрипте (deskBoss). */
+    #wrap { z-index: 3; grid-row: 1; }
+    .side { position: relative; z-index: 2; grid-row: 1; }
+    .desk-boss { display: block; position: fixed; left: 0; top: 0; width: 232px; height: 208px; opacity: 0;
+      image-rendering: pixelated; pointer-events: none; z-index: 0; will-change: transform; }
+
+    .card table { width: 100%; border-collapse: collapse; font: 16px Inter, sans-serif; font-variant-numeric: tabular-nums; }
+    .card td { padding: 6px 0; border-bottom: 1px solid rgba(251,218,148,.15); }
+    .card td:last-child { text-align: right; }
+    .card tr.win td { color: var(--orange); }
+    /* призы — подпись сверху, значение под ней (правка Антона в макете 08.10) */
+    .prize { display: flex; flex-direction: column; gap: 16px; font: 16px/19px Inter, sans-serif; }
+    .prize > div { display: flex; flex-direction: column; }
+    .prize b { font: 16px/20px "Pixeloid Mono", monospace; color: var(--orange); }
+    .prize span { color: #fff3d6; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+<aside class="side left">
+  <div class="brand">
+    <div class="eyebrow">Промо-игра бренда</div>
+    <img src="assets/v2/brand-zoom.png" alt="ZOOM">
+  </div>
+  <ol>
+    <li><b>1</b><span>Играй сразу. Без регистрации, 3&nbsp;попытки в&nbsp;день. Чтобы попасть в&nbsp;рейтинг, войди через почту или&nbsp;Telegram.</span></li>
+    <li><b>2</b><span>Код из&nbsp;пачки. В&nbsp;каждой пачке ZOOM уникальный код&nbsp;— +3&nbsp;попытки.</span></li>
+    <li><b>3</b><span>Топ-5 недели. Каждую неделю пятёрка лучших забирает призы.</span></li>
+  </ol>
+</aside>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="hud" class="px dim">
+    <div class="hearts" id="hLives"><img src="assets/v2/heart.png" alt=""><img src="assets/v2/heart.png" alt=""><img src="assets/v2/heart.png" alt=""></div>
+    <div class="mid"><div id="hScore">0</div><div id="hWave">ВОЛНА 1</div></div>
+    <button id="bPause" type="button">ПАУЗА</button>
+  </div>
+
+  <!-- старт -->
+  <div class="screen on px" id="sStart">
+    <img class="logo-img" src="assets/v2/logo.png" alt="ZOOM VADERS">
+    <div class="sub">Отбейся от волн инвейдеров и&nbsp;попади в&nbsp;топ недели</div>
+    <div class="attempts" id="attLine"></div>
+    <button class="btn" id="bPlay">ИГРАТЬ</button>
+    <button class="btn ghost" id="bCode">ВВЕСТИ КОД ИЗ ПАЧКИ</button>
+    <button class="btn ghost" id="bBoard">РЕЙТИНГ НЕДЕЛИ</button>
+    <div class="note">← → или&nbsp;A/D, пробел&nbsp;— огонь.<span class="touch"> На&nbsp;телефоне&nbsp;— веди пальцем, стрельба&nbsp;сама.</span></div>
+  </div>
+
+  <!-- код -->
+  <div class="screen px" id="sCode">
+    <div class="cheat">↑↓↑↓→←→←A</div>
+    <div class="sub">Код на&nbsp;удовольствие. Введи код из&nbsp;пачки ZOOM&nbsp;— получи +3&nbsp;попытки</div>
+    <input class="code" id="iCode" maxlength="12" placeholder="XXXX-XXXX" autocomplete="off">
+    <div class="msg" id="codeMsg"></div>
+    <button class="btn" id="bCodeOk">АКТИВИРОВАТЬ</button>
+    <button class="btn ghost" id="bCodeBack">НАЗАД</button>
+    <div class="note">Демо: подойдёт любой код от&nbsp;6 символов. Один код в&nbsp;день.</div>
+  </div>
+
+  <!-- рейтинг -->
+  <div class="screen px" id="sBoard">
+    <div class="tag">рейтинг недели · топ-5 получают призы</div>
+    <table class="lb" id="lb"></table>
+    <button class="btn ghost" id="bBoardBack">НАЗАД</button>
+  </div>
+
+  <!-- конец попытки -->
+  <div class="screen px" id="sOver">
+    <div class="tag" id="overTag">попытка окончена</div>
+    <div class="logo" style="font-size:14cqw" id="overScore">0</div>
+    <div class="sub" id="overText"></div>
+    <div class="attempts" id="attLine2"></div>
+    <button class="btn" id="bAgain">ЕЩЁ ПОПЫТКА</button>
+    <button class="btn ghost" id="bCode2">ВВЕСТИ КОД ИЗ ПАЧКИ</button>
+    <button class="btn ghost" id="bBoard2">РЕЙТИНГ НЕДЕЛИ</button>
+  </div>
+
+  <!-- пауза -->
+  <div class="screen px" id="sPause">
+    <div class="logo" style="font-size:12cqw">ПАУЗА</div>
+    <button class="btn" id="bResume">ПРОДОЛЖИТЬ</button>
+  </div>
+</div>
+
+<img class="desk-boss" id="deskBoss" src="assets/v2/boss-open.png" alt="">
+<aside class="side right">
+  <div class="card">
+    <h3>Рейтинг недели</h3>
+    <table id="lbSide"></table>
+  </div>
+  <div class="card">
+    <h3>Призы</h3>
+    <div class="prize">
+      <div><span>Топ-5 недели</span><b>консоли, Steam&nbsp;Deck</b></div>
+      <div><span>Ретро-полка</span><b>картриджи, плееры</b></div>
+      <div><span>Гран-при за&nbsp;всю акцию</span><b>Япония</b></div>
+    </div>
+  </div>
+</aside>
+<script>
+(() => {
+  // ---------- хранилище (демо: всё в браузере) ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+  const today = () => new Date().toISOString().slice(0, 10);
+  const DAILY = 3, CODE_BONUS = 3;
+  const UNLIMITED = true; // тестовый режим для Антона: попытки не списываются
+  function att() {
+    let a = store.get('zi_att', null);
+    if (!a || a.date !== today()) a = { date: today(), left: DAILY, code: false };
+    return a;
+  }
+  function saveAtt(a) { store.set('zi_att', a); }
+
+  const SEED = [['pixel_kate', 18420], ['arcade_max', 15230], ['zoomer777', 12900], ['invader_hunter', 11040],
+    ['nastya_8bit', 9650], ['dendy_kid', 7310], ['retro_vlad', 5480], ['lena_gg', 3920]];
+  function board() { return store.get('zi_board', SEED.map(([n, s]) => ({ n, s }))); }
+  function addScore(s) {
+    const b = board(); b.push({ n: 'ты', s, me: true });
+    b.sort((x, y) => y.s - x.s);
+    store.set('zi_board', b.slice(0, 20).map(r => ({ n: r.n, s: r.s, me: r.me })));
+    return b.findIndex(r => r.me && r.s === s) + 1;
+  }
+
+  // ---------- картинки ----------
+  // 08.10: всё из Figma «игра · дизайн 0810» — задник-мастер по частям, рой с пачки, корабль 14, босс со ртом
+  const IMG = {};
+  const SRC = { ufo: 'ufo', crab: 'crab', small: 'small', squid: 'squid', ship: 'ship', bossOpen: 'boss-open', bossClosed: 'boss-closed',
+    bgTop: 'bg-top', bgMid: 'bg-middle', bgBot: 'bg-bottom' };
+  for (const [k, f] of Object.entries(SRC)) { const i = new Image(); i.src = 'assets/v2/' + f + '.png'; IMG[k] = i; }
+  IMG.stars = new Image(); IMG.stars.src = 'assets/stars.png';
+  const SPACE = '#011b43';
+
+  // ---------- холст ----------
+  const W = 360; let H = 640;            // ширина поля 360, высота 640–800 — по экрану
+  // корабль: всё считается от размера пикселя (08.10: 122×77 → 86×54 → «ещё чутка меньше» — 76×48, пиксель 1,4)
+  const SHIP_CELL = 1.4, SHIP_W = 54 * SHIP_CELL, SHIP_H = 34 * SHIP_CELL;
+  const SHIP_Y = 90 + SHIP_H / 2;        // центр корабля от низа поля: низ корабля на 550 из 640
+  const cv = document.getElementById('c'), cx = cv.getContext('2d');
+  let K = 1;                             // точек экрана на 1 px поля
+  function fit() {
+    const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 3);
+    H = Math.round(Math.min(800, Math.max(640, W * r.height / r.width)));
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    K = cv.width / W;
+    cx.setTransform(K, 0, 0, cv.height / H, 0, 0);
+    if (S) S.player.y = H - SHIP_Y;
+  }
+  window.addEventListener('resize', fit);
+  // пиксель-арт: клетку округляем до целых точек экрана, иначе картинка мылится (решение 08.10)
+  function drawPix(img, x, y, cell) {
+    if (!img.naturalWidth) return;
+    const c = Math.max(1, Math.round(cell * K)) / K, w = img.naturalWidth * c, h = img.naturalHeight * c;
+    cx.imageSmoothingEnabled = false;
+    cx.drawImage(img, Math.round((x - w / 2) * K) / K, Math.round((y - h / 2) * K) / K, w, h);
+  }
+
+  // корабль игрока — финал 14 «красный стелс»: 54×34 пикселя рисунка
+  function drawShip(x, y) { drawPix(IMG.ship, x, y, SHIP_CELL); }
+
+  // звёзды — вырезаны из самой иллюстрации (atlas assets/stars.png); ставим их в пустое небо над сценой
+  const STAR_META = [[0, 0, 5, 5], [7, 0, 6, 6], [15, 0, 6, 6], [23, 0, 5, 5], [30, 0, 5, 6], [37, 0, 6, 6], [45, 0, 5, 5], [52, 0, 5, 5], [59, 0, 16, 16], [77, 0, 6, 6], [102, 0, 6, 6], [110, 0, 5, 6], [117, 0, 6, 6], [125, 0, 6, 6], [133, 0, 6, 6], [141, 0, 5, 5], [148, 0, 6, 5], [156, 0, 6, 6], [164, 0, 5, 5], [171, 0, 5, 5], [178, 0, 6, 6], [186, 0, 6, 6], [194, 0, 5, 5], [201, 0, 5, 5], [208, 0, 6, 5], [216, 0, 17, 16], [235, 0, 6, 6], [243, 0, 16, 17], [261, 0, 6, 6], [269, 0, 5, 6], [276, 0, 5, 5], [283, 0, 6, 6], [291, 0, 5, 5], [298, 0, 6, 6], [306, 0, 5, 6], [313, 0, 5, 6]];
+  const STAR_BRIGHT = [[0, 0, 5, 5], [15, 0, 6, 6], [37, 0, 6, 6], [59, 0, 16, 16], [77, 0, 6, 6], [102, 0, 6, 6], [117, 0, 6, 6], [156, 0, 6, 6], [216, 0, 17, 16], [235, 0, 6, 6], [243, 0, 16, 17], [261, 0, 6, 6], [269, 0, 5, 6], [283, 0, 6, 6], [291, 0, 5, 5], [298, 0, 6, 6], [306, 0, 5, 6], [313, 0, 5, 6]];
+  const SKY = [];
+  (function seed() {
+    let r = 20260929; const rnd = () => (r = (r * 1103515245 + 12345) % 2147483648) / 2147483648;
+    // дальний слой: все звёзды иллюстрации, мелко и медленно
+    for (let i = 0; i < 60; i++) SKY.push({ m: STAR_META[Math.floor(rnd() * STAR_META.length)], x: rnd() * W, y: rnd() * H, ph: rnd() * 6.28, v: 10 + rnd() * 18, k: .5 });
+    // ближний слой: яркие, крупнее и быстрее — отсюда ощущение полёта
+    for (let i = 0; i < 26; i++) SKY.push({ m: STAR_BRIGHT[Math.floor(rnd() * STAR_BRIGHT.length)], x: rnd() * W, y: rnd() * H, ph: rnd() * 6.28, v: 45 + rnd() * 45, k: .75 });
+  })();
+  function drawSkyStars(dt, t) {
+    if (!IMG.stars.naturalWidth) return;
+    for (const s of SKY) {
+      const [ax, ay, aw, ah] = s.m;
+      s.y += s.v * dt; if (s.y > H) { s.y = -ah; s.x = Math.random() * W; }
+      cx.globalAlpha = aw > 10 ? .75 + .25 * Math.sin(t * 1.5 + s.ph) : 1;
+      cx.drawImage(IMG.stars, ax, ay, aw, ah, Math.round(s.x), Math.round(s.y), aw * s.k, ah * s.k);
+    }
+    cx.globalAlpha = 1;
+  }
+
+  // ---------- состояние ----------
+  // размеры и раскладка роя — из Figma («рой и корабль · 360×640», группа «рой» 280×179)
+  const KIND = {
+    ufo: { w: 48, pts: 80 }, crab: { w: 32, pts: 50 }, small: { w: 29, pts: 40 }, squid: { w: 23, pts: 30 },
+  };
+  const BOSS_W = 174, BOSS_CELL = 3, BOSS_Y = 178, BOSS_IN = 2.2;   // босс: пиксель 3; вход «Внимание» 2,2 с
+  let S = null;
+  function newGame() {
+    S = { score: 0, lives: 3, wave: 0, t: 0, player: { x: W / 2, y: H - SHIP_Y, inv: 1.5, cool: 0 },
+      shots: [], bombs: [], enemies: [], boss: null, fx: [], formX: 0, formDir: 1, diveT: 1.5, over: false, banner: 0 };
+    nextWave();
+  }
+  function nextWave() {
+    S.wave++; S.enemies = []; S.bombs = []; S.banner = 1.6;
+    if (S.wave % 3 === 0) {
+      S.boss = { x: W / 2, y: -90, w: BOSS_W, hp: 24 + S.wave * 2, max: 24 + S.wave * 2, t: 0, hit: 0, enter: BOSS_IN, open: 0 };
+      S.banner = 0;
+      return;
+    }
+    const rows = [['ufo', 4, 61, 121], ['crab', 6, 45, 162], ['crab', 6, 45, 199], ['small', 7, 42, 236], ['squid', 7, 35.3, 272.5]];
+    rows.forEach(([k, n, gap, y], r) => {
+      for (let i = 0; i < n; i++) {
+        S.enemies.push({ k, slotX: (i - (n - 1) / 2) * gap, slotY: y, x: 0, y: -40 - r * 30, st: 'enter',
+          t: Math.random() * .3 + r * .08, hit: 0 });
+      }
+    });
+  }
+
+  // ---------- ввод ----------
+  const keys = {};
+  window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (['Space', 'ArrowLeft', 'ArrowRight'].includes(e.code) && mode === 'play') e.preventDefault();
+    if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+  let touchX = null;
+  const toLogical = ev => { const r = cv.getBoundingClientRect(); return (ev.clientX - r.left) / r.width * W; };
+  cv.addEventListener('pointerdown', e => { if (mode !== 'play') return; touchX = toLogical(e); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (touchX !== null) touchX = toLogical(e); });
+  const up = () => { touchX = null; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+  // ---------- экраны ----------
+  let mode = 'menu';
+  const $ = id => document.getElementById(id);
+  function show(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id));
+    $('bPause').style.display = id ? 'none' : 'block';
+    $('hud').classList.toggle('dim', !!id && id !== 'sPause');
+  }
+  function attText() {
+    if (UNLIMITED) return 'Тестовый режим: попытки без&nbsp;ограничений';
+    const a = att();
+    return a.left > 0 ? `Попыток сегодня: <b>${a.left}</b>` : 'Попытки на&nbsp;сегодня закончились&nbsp;— введи код из&nbsp;пачки или&nbsp;приходи завтра';
+  }
+  function refreshMenus() {
+    $('attLine').innerHTML = attText(); $('attLine2').innerHTML = attText();
+    const left = UNLIMITED || att().left > 0; $('bPlay').disabled = !left; $('bAgain').disabled = !left;
+  }
+  let backTo = 'sStart';
+  function openCode(from) { backTo = from; $('iCode').value = ''; $('codeMsg').textContent = ''; show('sCode'); setTimeout(() => $('iCode').focus(), 50); }
+  function openBoard(from) {
+    backTo = from;
+    const b = board();
+    $('lb').innerHTML = b.slice(0, 8).map((r, i) => `<tr class="${r.me ? 'me' : ''}"><td>${i + 1}. ${r.n}${i < 5 ? ' 🎁' : ''}</td><td>${r.s.toLocaleString('ru-RU')}</td></tr>`).join('');
+    show('sBoard');
+  }
+  function startAttempt() {
+    const a = att(); if (!UNLIMITED && a.left <= 0) return;
+    if (!UNLIMITED) { a.left--; saveAtt(a); }
+    newGame(); mode = 'play'; show(null); fit();
+  }
+  function togglePause() {
+    if (mode === 'play') { mode = 'pause'; show('sPause'); }
+    else if (mode === 'pause') { mode = 'play'; show(null); last = performance.now(); }
+  }
+  $('bPlay').onclick = startAttempt; $('bAgain').onclick = startAttempt;
+  $('bCode').onclick = () => openCode('sStart'); $('bCode2').onclick = () => openCode('sOver');
+  $('bBoard').onclick = () => openBoard('sStart'); $('bBoard2').onclick = () => openBoard('sOver');
+  $('bCodeBack').onclick = () => { refreshMenus(); show(backTo); };
+  $('bBoardBack').onclick = () => show(backTo);
+  $('bResume').onclick = togglePause; $('bPause').onclick = togglePause;
+  $('bCodeOk').onclick = () => {
+    const v = $('iCode').value.trim(); const a = att();
+    if (v.replace(/[^0-9a-zа-я]/gi, '').length < 6) { $('codeMsg').textContent = 'Код слишком короткий'; return; }
+    if (a.code) { $('codeMsg').textContent = 'Сегодня код уже активирован'; return; }
+    a.left += CODE_BONUS; a.code = true; saveAtt(a);
+    $('codeMsg').textContent = '+3 попытки! Разгон как в детстве'; refreshMenus();
+    setTimeout(() => show(backTo), 900);
+  };
+
+  function endAttempt() {
+    mode = 'over';
+    const place = addScore(S.score);
+    $('overScore').textContent = String(S.score);
+    $('overText').innerHTML = place <= 5 ? `Ты ${place}-й в&nbsp;рейтинге недели&nbsp;— сейчас в&nbsp;призовой пятёрке!` : `Ты ${place}-й в&nbsp;рейтинге недели. До&nbsp;призовой пятёрки&nbsp;— ещё немного`;
+    refreshMenus(); show('sOver');
+  }
+
+  // ---------- игра ----------
+  const boom = (x, y, c, n = 14) => { for (let i = 0; i < n; i++) S.fx.push({ x, y, vx: (Math.random() - .5) * 180, vy: (Math.random() - .5) * 180, t: .5 + Math.random() * .3, c }); };
+  const hit = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;
+  // попадание в корабль — по силуэту: фюзеляж с кабиной + крылья (до 08.10 была зона старого корабля 36×26)
+  const hitShip = (o, p) => hit(o, { x: p.x, y: p.y, w: SHIP_W * .33, h: SHIP_H * .96 }) || hit(o, { x: p.x, y: p.y + SHIP_H * .11, w: SHIP_W * .95, h: SHIP_H * .52 });
+  function sprH(k, w) { const i = IMG[k === 'boss' ? 'bossOpen' : k]; return i.naturalWidth ? w * i.naturalHeight / i.naturalWidth : w * .75; }
+
+  function update(dt) {
+    S.t += dt; S.banner = Math.max(0, S.banner - dt);
+    const p = S.player, speed = 230 + S.wave * 4;
+    // движение
+    let dx = 0;
+    if (keys.ArrowLeft || keys.KeyA) dx -= 1;
+    if (keys.ArrowRight || keys.KeyD) dx += 1;
+    if (touchX !== null) { const d = touchX - p.x; dx = Math.abs(d) < 3 ? 0 : Math.sign(d) * Math.min(1, Math.abs(d) / 20); }
+    p.x = Math.max(SHIP_W * .42, Math.min(W - SHIP_W * .42, p.x + dx * 260 * dt));
+    // огонь
+    p.cool -= dt; p.inv = Math.max(0, p.inv - dt);
+    const firing = keys.Space || touchX !== null;
+    if (firing && p.cool <= 0 && S.shots.length < 3) { S.shots.push({ x: p.x, y: p.y - SHIP_H / 2, w: 3, h: 10 }); p.cool = .26; }
+    S.shots.forEach(s => s.y -= 520 * dt); S.shots = S.shots.filter(s => s.y > -10);
+
+    // строй
+    S.formX += S.formDir * (18 + S.wave * 3) * dt;
+    if (Math.abs(S.formX) > 26) S.formDir *= -1;
+    const alive = S.enemies.filter(e => e.st !== 'dead');
+    S.diveT -= dt;
+    if (S.diveT <= 0 && alive.length) {
+      const cand = alive.filter(e => e.st === 'form');
+      if (cand.length) {
+        const e = cand[Math.floor(Math.random() * cand.length)];
+        e.st = 'dive'; e.t = 0; e.dx0 = e.x; e.dir = e.x < W / 2 ? 1 : -1; e.fired = 0;
+      }
+      S.diveT = Math.max(.45, 1.6 - S.wave * .12) * (.6 + Math.random() * .8);
+    }
+    for (const e of alive) {
+      const kx = W / 2 + e.slotX + S.formX, ky = e.slotY + Math.sin(S.t * 2 + e.slotX * .05) * 2;
+      e.w = KIND[e.k].w; e.h = sprH(e.k, e.w);
+      if (e.st === 'enter') {
+        e.t -= dt; if (e.t < 0) { e.x += (kx - e.x) * Math.min(1, dt * 7); e.y += (ky - e.y) * Math.min(1, dt * 7); if (Math.abs(ky - e.y) < 2) e.st = 'form'; }
+        else { e.x = kx; }
+      } else if (e.st === 'form') { e.x = kx; e.y = ky; }
+      else if (e.st === 'dive') {
+        e.t += dt;
+        const v = 115 + S.wave * 10;
+        e.y += v * dt;
+        e.x = e.dx0 + Math.sin(e.t * 2.6) * 70 * e.dir + (p.x - e.dx0) * Math.min(1, e.t * .35);
+        if (e.fired < (S.wave > 2 ? 2 : 1) && e.y > 180 && Math.random() < dt * 1.0) { S.bombs.push({ x: e.x, y: e.y + 10, w: 4, h: 9, vx: (p.x - e.x) * .25 }); e.fired++; }
+        if (e.y > H + 30) { e.st = 'enter'; e.y = -30; e.t = 0; }
+      }
+      if (e.st === 'form' && Math.random() < dt * (.006 + S.wave * .003)) S.bombs.push({ x: e.x, y: e.y + 10, w: 4, h: 9, vx: 0 });
+      e.hit = Math.max(0, e.hit - dt);
+      // попадания
+      for (const s of S.shots) if (!s.dead && hit(s, e)) {
+        s.dead = true; e.st = 'dead';
+        const pts = KIND[e.k].pts * (e.y > 200 ? 2 : 1);
+        S.score += pts; boom(e.x, e.y, '#f0a521');
+        S.fx.push({ x: e.x, y: e.y, txt: '+' + pts, t: .8 });
+      }
+      // таран
+      if (e.st === 'dive' && p.inv <= 0 && hitShip(e, p)) { e.st = 'dead'; boom(e.x, e.y, '#f0a521'); hurt(); }
+    }
+    // босс
+    const b = S.boss;
+    if (b && b.enter > 0) {
+      // вход «Внимание»: босс выплывает сверху, рот закрыт, не стреляет и неуязвим
+      b.enter = Math.max(0, b.enter - dt);
+      const k = 1 - b.enter / BOSS_IN, e = 1 - (1 - Math.min(1, k * 1.25)) ** 3;
+      b.x = W / 2; b.y = -90 + (BOSS_Y - -90) * e;
+    } else if (b) {
+      b.t += dt; b.hit = Math.max(0, b.hit - dt); b.open = Math.max(0, b.open - dt);
+      b.x = W / 2 + Math.sin(b.t * .9) * 90; b.y = BOSS_Y + Math.sin(b.t * 1.7) * 14;
+      const bh = sprH('boss', b.w);
+      if (Math.random() < dt * (1.2 + S.wave * .08)) { b.open = .35; for (let i = -1; i <= 1; i++) S.bombs.push({ x: b.x + i * 26, y: b.y + bh / 2, w: 5, h: 10, vx: i * 45 }); }
+      for (const s of S.shots) if (!s.dead && hit(s, { x: b.x, y: b.y, w: b.w * .8, h: bh * .8 })) {
+        s.dead = true; b.hp--; b.hit = .08; boom(s.x, s.y, '#fbda94', 4);
+        if (b.hp <= 0) { S.score += 1000; boom(b.x, b.y, '#f0a521', 60); S.fx.push({ x: b.x, y: b.y, txt: '+1000', t: 1.2 }); S.boss = null; }
+      }
+    }
+    S.shots = S.shots.filter(s => !s.dead);
+    // бомбы
+    S.bombs.forEach(o => { o.y += (160 + S.wave * 8) * dt; o.x += o.vx * dt; });
+    for (const o of S.bombs) if (!o.dead && p.inv <= 0 && hitShip(o, p)) { o.dead = true; hurt(); }
+    S.bombs = S.bombs.filter(o => !o.dead && o.y < H + 10);
+    // эффекты
+    S.fx.forEach(f => { f.t -= dt; if (f.vx != null) { f.x += f.vx * dt; f.y += f.vy * dt; } else f.y -= 30 * dt; });
+    S.fx = S.fx.filter(f => f.t > 0);
+    // волна
+    if (!S.boss && S.enemies.every(e => e.st === 'dead')) nextWave();
+    // HUD
+    $('hScore').textContent = String(S.score);   // как в макете: 1250, без пробела
+    $('hWave').textContent = 'ВОЛНА ' + S.wave;
+    [...$('hLives').children].forEach((h, i) => h.classList.toggle('lost', i >= S.lives));
+  }
+  function hurt() {
+    S.lives--; S.player.inv = 2; boom(S.player.x, S.player.y, '#fbda94', 24);
+    if (S.lives <= 0) { S.over = true; setTimeout(endAttempt, 700); }
+  }
+
+  // задник — мастер «задник» из Figma: top к верху · middle по центру · bottom к низу
+  function drawBack(dt) {
+    cx.fillStyle = SPACE; cx.fillRect(0, 0, W, H);
+    cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+    if (IMG.bgTop.naturalWidth) cx.drawImage(IMG.bgTop, 22, -1, IMG.bgTop.naturalWidth / 3, IMG.bgTop.naturalHeight / 3);
+    if (IMG.bgMid.naturalWidth) cx.drawImage(IMG.bgMid, 8, H / 2 - 120, IMG.bgMid.naturalWidth / 3, IMG.bgMid.naturalHeight / 3);
+    drawSkyStars(dt, performance.now() / 1000);
+    cx.imageSmoothingEnabled = true;
+    if (IMG.bgBot.naturalWidth) cx.drawImage(IMG.bgBot, 0, H - 442, 360, 442);
+  }
+  // полоса-предупреждение «ВНИМАНИЕ · БОСС» (Figma: «босс · А · внимание»)
+  function hazard(y) {
+    cx.fillStyle = '#000'; cx.fillRect(0, y, W, 12); cx.fillRect(0, y + 84, W, 12);
+    cx.fillStyle = '#f0a521';
+    for (const yy of [y, y + 84]) for (let r = 0; r < 12; r += 4) for (let c = 0; c < W; c += 4)
+      if (Math.floor((c + r) / 4 / 3) % 2 === 0) cx.fillRect(c, yy + r, 4, 4);
+    cx.fillStyle = '#0c1d42'; cx.fillRect(0, y + 12, W, 72);
+  }
+  function draw(dt) {
+    drawBack(dt);
+    if (!S) return;
+    // враги — вектор с пачки, картинки в 3×, сглаживание по-хорошему
+    cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+    for (const e of S.enemies) if (e.st !== 'dead' && IMG[e.k].naturalWidth) {
+      const h = sprH(e.k, e.w);
+      cx.drawImage(IMG[e.k], Math.round((e.x - e.w / 2) * K) / K, Math.round((e.y - h / 2) * K) / K, e.w, h);
+    }
+    const b = S.boss;
+    if (b) {
+      const open = b.enter <= 0 && (b.open > 0 || Math.floor(b.t * 2.5) % 2 === 0);
+      if (b.hit > 0) cx.filter = 'brightness(2)';
+      drawPix(open ? IMG.bossOpen : IMG.bossClosed, b.x, b.y, BOSS_CELL);
+      cx.filter = 'none';
+      if (b.enter > 0) {
+        const fade = Math.min(1, b.enter / .4);
+        cx.globalAlpha = .45 * fade; cx.fillStyle = SPACE; cx.fillRect(0, 0, W, H); cx.globalAlpha = fade;
+        const y = H / 2 - 58; hazard(y);
+        cx.textAlign = 'center'; cx.textBaseline = 'top';
+        if (Math.floor(b.enter * 6) % 2 === 0) { cx.fillStyle = '#e0431a'; cx.font = '14px "Pixeloid Mono", monospace'; cx.fillText('ВНИМАНИЕ', W / 2, y + 20); }
+        cx.fillStyle = '#f0a521'; cx.font = '40px "Pixeloid Mono", monospace'; cx.fillText('БОСС', W / 2, y + 36);
+        cx.textBaseline = 'alphabetic'; cx.globalAlpha = 1;
+      } else {
+        // полоса здоровья под шапкой
+        cx.fillStyle = '#f0a521'; cx.font = '12px "Pixeloid Mono", monospace'; cx.textAlign = 'left'; cx.textBaseline = 'top';
+        cx.fillText('БОСС', 16, 76); cx.textBaseline = 'alphabetic';
+        cx.fillStyle = '#000'; cx.fillRect(62, 77, 282, 12);
+        const fw = 278 * b.hp / b.max;
+        cx.fillStyle = '#f0a521'; cx.fillRect(64, 79, fw, 8);
+        cx.fillStyle = '#a8620a'; cx.fillRect(64, 85, fw, 2);
+      }
+    }
+    // снаряды
+    cx.fillStyle = '#fff3d6'; for (const s of S.shots) cx.fillRect(s.x - 1.5, s.y - 5, 3, 10);
+    cx.fillStyle = '#ff5a3c'; for (const o of S.bombs) { cx.fillRect(o.x - 2, o.y - 4, 4, 8); }
+    // игрок
+    if (!S.over) { const p = S.player; if (!(p.inv > 0 && Math.floor(p.inv * 12) % 2)) drawShip(p.x, p.y); }
+    // эффекты
+    for (const f of S.fx) {
+      if (f.txt) { cx.fillStyle = '#fbda94'; cx.font = '12px "Pixeloid Mono", monospace'; cx.textAlign = 'center'; cx.fillText(f.txt, f.x, f.y); }
+      else { cx.fillStyle = f.c; cx.globalAlpha = Math.max(0, f.t * 2); cx.fillRect(f.x, f.y, 3, 3); cx.globalAlpha = 1; }
+    }
+    if (S.banner > 0) {
+      cx.globalAlpha = Math.min(1, S.banner * 2); cx.fillStyle = '#f0a521'; cx.textAlign = 'center';
+      cx.font = '28px "Pixeloid Mono", monospace'; cx.fillText('ВОЛНА ' + S.wave, W / 2, H / 2);
+      cx.globalAlpha = 1;
+    }
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    if (mode === 'play' && S && !S.over) update(dt);
+    else if (mode === 'play' && S && S.over) { S.fx.forEach(f => { f.t -= dt; if (f.vx != null) { f.x += f.vx * dt; f.y += f.vy * dt; } }); S.fx = S.fx.filter(f => f.t > 0); }
+    draw(mode === 'pause' ? 0 : dt);
+    requestAnimationFrame(loop);
+  }
+  function sideBoard() {
+    const el = document.getElementById('lbSide'); if (!el) return;
+    el.innerHTML = board().slice(0, 7).map((r, i) => `<tr class="${i < 5 ? 'win' : ''}"><td>${i + 1}. ${r.n}</td><td>${r.s.toLocaleString('ru-RU')}</td></tr>`).join('');
+  }
+  sideBoard(); setInterval(sideBoard, 3000);
+  // босс-талисман на десктопе: выглядывания из-за блоков под углом + облёт (08.10, слово Антона)
+  (function deskBoss() {
+    const el = document.getElementById('deskBoss'); if (!el) return;
+    const desk = window.matchMedia('(min-width: 1024px)'), still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const OPEN = 'assets/v2/boss-open.png', SHUT = 'assets/v2/boss-closed.png', BW = 232, BH = 208;
+    let state = 'rest', isOpen = true, lastChomp = 0;
+    (function chomp(now) {       // пасть: в облёте чаще, в выглядывании средне, в покое редко
+      const gap = state === 'fly' ? 220 : state === 'peek' ? 320 : 600;
+      if (now - lastChomp > gap) { isOpen = !isOpen; el.src = isOpen ? OPEN : SHUT; lastChomp = now; }
+      requestAnimationFrame(chomp);
+    })(0);
+    const $q = s => document.querySelector(s);
+    const rect = k => {
+      if (k === 'screen') return { left: 0, top: 0, right: innerWidth, bottom: innerHeight, width: innerWidth, height: innerHeight };
+      if (k === 'rating') return document.querySelectorAll('.side.right .card')[0].getBoundingClientRect();
+      if (k === 'prizes') return document.querySelectorAll('.side.right .card')[1].getBoundingClientRect();
+      return $q(k).getBoundingClientRect();
+    };
+    // места: блок · сторона · где вдоль стороны (0–1) · насколько высунуться · наклон · сдвиг [x, y]
+    // позы выставлены Антоном в кадрах Figma «босс · выглядывает · 1…8» (08.10, сняты read_peeks.py)
+    const SPOTS = [
+      ['#wrap', 'left', .34, 170, -28, [0, 90]], ['#wrap', 'right', .62, 140, 28, [0, -70]], ['#wrap', 'top', .78, 26, 14, [150, 0]],
+      ['rating', 'top', .72, 118, -12, [0, 0]], ['rating', 'right', .5, 84, 26, [0, -160]], ['prizes', 'bottom', .38, 116, 196, [0, 0]],
+      ['screen', 'left', .86, 140, 20, [0, 0]], ['screen', 'bottom', .2, 112, -6, [0, 0]],
+    ];
+    function pose(sp, out) {       // центр босса и угол: спрятан за блоком (out=false) или высунулся (out=true)
+      const [k, side, t, rev, ang, sh = [0, 0]] = sp, r = rect(k), scr = k === 'screen', g = 14;
+      let cx = r.left + r.width * t, cy = r.top + r.height * t;
+      // у блока «высунуться на rev» — наружу от его края; у края экрана — внутрь экрана (08.10: знак был перепутан)
+      if (side === 'left') cx = scr ? (out ? rev - BW / 2 : -BW / 2 - g) : (out ? r.left - rev + BW / 2 : r.left + BW / 2 + g);
+      if (side === 'right') cx = scr ? (out ? r.right - rev + BW / 2 : r.right + BW / 2 + g) : (out ? r.right + rev - BW / 2 : r.right - BW / 2 - g);
+      if (side === 'top') cy = scr ? (out ? rev - BH / 2 : -BH / 2 - g) : (out ? r.top - rev + BH / 2 : r.top + BH / 2 + g);
+      if (side === 'bottom') cy = scr ? (out ? r.bottom - rev + BH / 2 : r.bottom + BH / 2 + g) : (out ? r.bottom + rev - BH / 2 : r.bottom - BH / 2 - g);
+      if (side === 'left' || side === 'right') cx += 0; else cx = Math.min(Math.max(cx, r.left + BW / 2), r.right - BW / 2);
+      return { cx: cx + sh[0], cy: cy + sh[1], a: out ? ang : ang * .3 };
+    }
+    const tf = p => `translate(${Math.round(p.cx - BW / 2)}px, ${Math.round(p.cy - BH / 2)}px) rotate(${p.a}deg) scale(${p.s || 1})`;
+    const go = (frames, ms, ease = 'ease-in-out') => {   // новая анимация стартует с того же места; старые гасим, чтобы не копились
+      const an = el.animate(frames, { duration: ms, easing: ease, fill: 'forwards' });
+      el.getAnimations().forEach(x => x !== an && x.cancel());
+      return an.finished;
+    };
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const pick = (arr, not) => { let x; do { x = arr[Math.floor(Math.random() * arr.length)]; } while (x === not && arr.length > 1); return x; };
+    // босс НИКОГДА не исчезает (Антон 08.10: «не делай, чтобы он прям исчезал»): всегда виден и всегда
+    // перелетает из укрытия в укрытие позади контента, чуть затемнённым; ярким становится, когда выглядывает
+    const DIM = 'brightness(.55) saturate(.8)';
+    let cur = null;
+    async function moveTo(p, { ms, ease = 'ease-in-out', filter = DIM } = {}) {
+      const from = cur || p, d = Math.hypot(p.cx - from.cx, p.cy - from.cy);
+      const dur = ms || Math.min(2400, Math.max(700, d * 1.6));
+      await go([{ transform: tf(from), filter: getComputedStyle(el).filter === 'none' ? 'none' : DIM }, { transform: tf(p), filter }], dur, ease);
+      cur = p;
+    }
+    async function peek(sp) {
+      const hid = pose(sp, false), out = pose(sp, true);
+      state = 'rest'; await moveTo(hid);                                   // перелёт в укрытие позади контента
+      state = 'peek';
+      await moveTo(out, { ms: 650, ease: 'cubic-bezier(.2,.9,.3,1.15)', filter: 'none' });
+      await wait(1500 + Math.random() * 1100);
+      await moveTo(hid, { ms: 450, ease: 'ease-in' });
+      state = 'rest';
+    }
+    async function fly(to) {         // облёт позади контента, силуэтом, и в следующее укрытие
+      const b = pose(to, false), W = innerWidth, H = innerHeight;
+      const pts = [[.84, .14], [.55, .07], [.2, .2], [.08, .6], [.38, .86], [.72, .72]].map(([x, y]) => ({ cx: W * x, cy: H * y, a: 0 }));
+      const dim = 'brightness(.42) saturate(.7)';
+      state = 'fly';
+      await go([{ transform: tf(cur), filter: DIM }, ...pts.map(p => ({ transform: tf(p), filter: dim })), { transform: tf(b), filter: DIM }], 10000);   // облёт медленнее — Антон 08.10
+      cur = b; state = 'rest';
+    }
+    // во время игры — пролёт ПЕРЕД колонкой с игрой, мешает смотреть (Антон 08.10: «чтобы эта мразота
+    // периодически мешала играть»). Только картинка: в корабль не врезается, пули не ловит.
+    // Заходит на пролёт и уходит с него, не пересекая колонку, — поэтому смена «сзади/спереди» не видна
+    let nextPass = 0;
+    async function passFront() {
+      // растёт на пролёте (Антон 08.10: «когда играешь на десктопе, он может увеличиваться»): к середине колонки
+      // крупнее, как будто летит на игрока; с каждой волной база крупнее, до двух раз
+      const base = Math.min(2, 1 + (S.wave - 3) * .15), SC = [.9, 1.3, 1.6, 1.3, .9].map(k => k * base);
+      const r = rect('#wrap'), ltr = Math.random() < .5, y0 = r.top + r.height * (.18 + Math.random() * .5);
+      const off = BW * .5 * SC[0] + 12;
+      const x0 = ltr ? r.left - off : r.right + off, x1 = ltr ? r.right + off : r.left - off;
+      const pts = [0, .25, .5, .75, 1].map((k, i) => ({ cx: x0 + (x1 - x0) * k, cy: y0 + Math.sin(k * Math.PI * 2) * 40, a: (ltr ? 1 : -1) * (i % 2 ? 6 : -6), s: SC[i] }));
+      await moveTo(pts[0], { filter: 'none' });
+      el.style.zIndex = 10; state = 'fly';
+      await go(pts.map(p => ({ transform: tf(p), filter: 'none' })), 3000, 'linear');
+      el.style.zIndex = ''; state = 'rest';
+      cur = pts[4]; await moveTo({ ...pts[4], s: 1 }, { ms: 500 });   // обратно в обычный размер уже позади колонки
+    }
+    // первые две волны лёгкие — пролётов нет, мешать начинает с 3-й (Антон 08.10)
+    // великан (Антон 08.10, кадры «босс · выглядывает · 4 рейтинг» в Section 1): ×3,6, поверх всего, срезан краем экрана;
+    // две позы — справа над рейтингом и слева над правилами и игрой. Только десктоп (на телефоне талисмана нет)
+    async function giant() {
+      const W = innerWidth, H = innerHeight, w = rect('#wrap'), right = Math.random() < .5;
+      const big = right ? { cx: W - 137, cy: H * .47, a: 2, s: 3.6 } : { cx: w.left - 49, cy: H * .46, a: 2, s: 3.6 };
+      const edge = right ? { cx: W + BW * .6, cy: H * .47, a: 0, s: 1 } : { cx: -BW * .6, cy: H * .46, a: 0, s: 1 };
+      await moveTo(edge);                                    // позади контента — к краю экрана
+      el.style.zIndex = 10; state = 'fly';
+      await moveTo(big, { ms: 700, ease: 'cubic-bezier(.2,.9,.3,1.12)', filter: 'none' });
+      state = 'peek'; await wait(1200 + Math.random() * 600);
+      state = 'fly'; await moveTo(edge, { ms: 550, ease: 'ease-in', filter: 'none' });
+      el.style.zIndex = ''; state = 'rest';
+    }
+    const playing = () => mode === 'play' && S && !S.over && S.wave >= 3;
+    setInterval(() => { if (!playing()) nextPass = 0; else if (!nextPass) nextPass = performance.now() + 8000 + Math.random() * 4000; }, 250);
+    async function maybePass() {
+      if (!playing()) { nextPass = 0; return; }
+      const now = performance.now();
+      if (nextPass && now >= nextPass) { await (Math.random() < .4 ? giant() : passFront()); nextPass = performance.now() + 15000 + Math.random() * 10000; }
+    }
+    async function run() {
+      el.style.opacity = 1;
+      if (still) { el.style.transform = tf(pose(SPOTS[3], true)); return; }
+      let last = SPOTS[7]; cur = pose(last, false); el.style.transform = tf(cur);   // старт за нижним краем экрана
+      for (;;) {
+        if (!desk.matches) { await wait(1000); continue; }
+        for (let i = 0; i < 3; i++) {
+          last = pick(SPOTS, last); await peek(last); await maybePass();
+          await wait(500 + Math.random() * 900); await maybePass();
+        }
+        if (mode === 'play') continue;    // в игре облёта сзади нет — только выглядывания и пролёты спереди
+        const to = pick(SPOTS, last); await fly(to); last = to; await wait(600);
+      }
+    }
+    if (document.readyState === 'complete') run(); else addEventListener('load', run);
+  })();
+  fit(); refreshMenus(); requestAnimationFrame(loop);
+  window.__zi = { get state() { return S; }, get mode() { return mode; }, att, board };
+})();
+</script>
+</body>
+</html>
